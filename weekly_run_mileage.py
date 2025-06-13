@@ -2,6 +2,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from collections import defaultdict
 import pandas as pd
+import matplotlib.pyplot as plt
 
 def parse_health_export_xml(file_path):
     tree = ET.parse(file_path)
@@ -54,10 +55,9 @@ def parse_health_export_xml(file_path):
     for current in potential_workouts:
         keep = True
         for i, existing in enumerate(filtered_workouts):
-            # Check for overlap: start < other.end and end > other.start
             if (current['startDate'] < existing['endDate']) and (current['endDate'] > existing['startDate']):
                 if current['distance'] > existing['distance']:
-                    filtered_workouts[i] = current  # Replace with longer distance
+                    filtered_workouts[i] = current
                 keep = False
                 break
         if keep:
@@ -83,10 +83,36 @@ def aggregate_weekly_mileage(run_workouts):
     df = pd.DataFrame(sorted_weeks, columns=['Week Start', 'Total Mileage'])
     return df
 
-def export_weekly_mileage(file_path, output_csv=None):
+def export_weekly_mileage(file_path, output_csv=None, output_chart=None, output_raw_csv=None):
     workouts = parse_health_export_xml(file_path)
     weekly_df = aggregate_weekly_mileage(workouts)
+
     if output_csv:
         weekly_df.to_csv(output_csv, index=False)
         print(f"Exported weekly mileage to: {output_csv}")
+
+    if output_raw_csv:
+        raw_df = pd.DataFrame(workouts)
+        raw_df = raw_df.rename(columns={'startDate': 'Start Date', 'endDate': 'End Date', 'distance': 'Distance (mi)'})
+        raw_df.to_csv(output_raw_csv, index=False)
+        print(f"Exported raw run data to: {output_raw_csv}")
+
+    if output_chart:
+        plt.figure(figsize=(16, 6))
+        bars = plt.bar(weekly_df["Week Start"], weekly_df["Total Mileage"], width=5)
+        for bar in bars:
+            height = bar.get_height()
+            plt.annotate(f'{int(height)}',
+                        xy=(bar.get_x() + bar.get_width() / 2, height),
+                        xytext=(0, 3),
+                        textcoords="offset points",
+                        ha='center', va='bottom', fontsize=9)
+        plt.title("WEEKLY MILEAGE", fontsize=16, weight='bold')
+        plt.ylabel("Miles")
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        plt.savefig(output_chart, dpi=150)
+        plt.close()
+        print(f"Chart saved to: {output_chart}")
+
     return weekly_df
